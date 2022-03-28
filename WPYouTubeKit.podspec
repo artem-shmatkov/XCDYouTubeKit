@@ -2,7 +2,7 @@ Pod::Spec.new do |s|
   s.name                   = "XCDYouTubeKit"
   s.version                = "0.1.0"
   s.summary                = "YouTube video player for iOS and OS X."
-  s.homepage               = "https://github.com/WPMedia/WPYouTubeKit"
+  s.homepage               = "https://github.com/WPMedia"
   s.license                = { :type => "MIT", :file => "LICENSE" }
   s.author                 = { "Cédric Luthi" => "cedric.luthi@gmail.com" }
   s.source                 = { :git => "https://github.com/WPMedia/WPYouTubeKit.git", :tag => s.version.to_s }
