@@ -1,5 +1,5 @@
 Pod::Spec.new do |s|
-  s.name                   = "XCDYouTubeKit"
+  s.name                   = "WPYouTubeKit"
   s.version                = "0.1.0"
   s.summary                = "YouTube video player for iOS and OS X."
   s.homepage               = "https://github.com/WPMedia"
