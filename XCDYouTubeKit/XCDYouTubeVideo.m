@@ -27,13 +27,19 @@ NSDictionary *XCDStreamingDataWithString(NSString *string)
 	return JSON[@"streamingData"];
 }
 
-NSString *XCDHTTPLiveStreamingStringWithString(NSString *string)
+NSString *XCDHTTPLiveStreamingStringWithDictionary(NSDictionary *dictionary)
 {
-	NSDictionary *streamingData = XCDStreamingDataWithString(string);
-	NSString *manifestURL = streamingData[@"hlsManifestUrl"];
+	NSString *manifestURL = dictionary[@"hlsManifestUrl"];
 	if (manifestURL.length == 0) { return nil; }
 	
 	return manifestURL;
+}
+
+NSString *XCDHTTPLiveStreamingStringWithString(NSString *string)
+{
+	NSDictionary *streamingData = XCDStreamingDataWithString(string);
+	
+	return XCDHTTPLiveStreamingStringWithDictionary(streamingData);
 }
 
 NSArray <NSDictionary *> *XCDThumnailArrayWithString(NSString *string)
@@ -53,16 +59,9 @@ NSArray <NSDictionary *> *XCDThumnailArrayWithString(NSString *string)
 	return thumbnails;
 }
 
-NSArray <NSDictionary *> *XCDCaptionArrayWithString(NSString *string)
+NSArray <NSDictionary *> *XCDCaptionArrayWithDictionary(NSDictionary *data)
 {
-	NSError *error = nil;
-	NSData *data = [string dataUsingEncoding:NSUTF8StringEncoding];
-	if (!data) { return nil; }
-	NSDictionary *JSON = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingAllowFragments error:&error];
-	
-	if (error) { return nil; }
-	
-	NSDictionary *captions = JSON[@"captions"];
+	NSDictionary *captions = data[@"captions"];
 	NSDictionary *playerCaptionsTracklistRenderer = captions[@"playerCaptionsTracklistRenderer"];
 	NSArray *captionTracks = playerCaptionsTracklistRenderer[@"captionTracks"];
 	
@@ -93,10 +92,9 @@ NSDictionary *XCDDictionaryWithQueryString(NSString *string)
 			value = [value stringByReplacingOccurrencesOfString:@"+" withString:@" "];
 			if (dictionary[key] && ![(NSObject *)dictionary[key] isEqual:value])
 			{
-				XCDYouTubeLogWarning(@"Using XCDDictionaryWithQueryString is inappropriate because the query string has multiple values for the key '%@'\n"
-									 @"Query: %@\n"
-									 @"Discarded value: %@", key, string, dictionary[key]);
-			}
+				XCDYouTubeLogWarning(@"Using XCDDictionaryWithQueryString is inappropriate because the query string has multiple values for the key '%@'\n",key);
+				XCDYouTubeLogDebug(@"Query: %@\n"
+								   @"Discarded value: %@",string, dictionary[key]);		}
 			dictionary[key] = value;
 		}
 	}
@@ -160,17 +158,25 @@ static NSDate * ExpirationDate(NSURL *streamURL)
 	return expire > 0 ? [NSDate dateWithTimeIntervalSince1970:expire] : nil;
 }
 
-- (instancetype) initWithIdentifier:(NSString *)identifier info:(NSDictionary *)info playerScript:(XCDYouTubePlayerScript *)playerScript response:(NSURLResponse *)response error:(NSError * __autoreleasing *)error
+- (instancetype) initWithIdentifier:(NSString *)identifier
+							   info:(NSDictionary *)info
+					   playerScript:(XCDYouTubePlayerScript *)playerScript
+						   response:(NSURLResponse *)response
+							  error:(NSError * __autoreleasing *)error
+					 responseString:(NSString *)responseString
 {
 	if (!(self = [super init]))
 		return nil; // LCOV_EXCL_LINE
 	
 	_identifier = identifier;
 	
-	NSString *playerResponse = info[@"player_response"];
+	NSString *playerResponse = responseString;
 	NSString *streamMap = info[@"url_encoded_fmt_stream_map"];
 	NSArray *alternativeStreamMap = XCDStreamingDataWithString(playerResponse)[@"formats"] == nil ? info[@"streamingData"][@"formats"] : XCDStreamingDataWithString(playerResponse)[@"formats"];
 	NSString *httpLiveStream = info[@"hlsvp"] ?: XCDHTTPLiveStreamingStringWithString(playerResponse);
+	if (httpLiveStream.length == 0) {
+		httpLiveStream = info[@"streamingData"][@"hlsManifestUrl"];
+	}
 	NSString *adaptiveFormats = info[@"adaptive_fmts"];
 	NSArray *alternativeAdaptiveFormats = XCDStreamingDataWithString(playerResponse)[@"adaptiveFormats"]  == nil ? info[@"streamingData"][@"adaptiveFormats"] : XCDStreamingDataWithString(playerResponse)[@"adaptiveFormats"];
 	NSDictionary *videoDetails = XCDDictionaryWithString(playerResponse)[@"videoDetails"] == nil ? info[@"videoDetails"] : XCDDictionaryWithString(playerResponse)[@"videoDetails"];
@@ -220,9 +226,9 @@ static NSDate * ExpirationDate(NSURL *streamURL)
 		NSString *thumbnail = info[@"thumbnail_url"] ?: info[@"iurl"];
 		NSURL *thumbnailURL = thumbnail ? [NSURL URLWithString:thumbnail] : nil;
 		_thumbnailURL = thumbnailURL;
-		
+
 		if (!_thumbnailURL) {
-			NSArray<NSDictionary *> *thumbnails = XCDThumnailArrayWithString(playerResponse);
+			NSArray<NSDictionary *> *thumbnails = XCDThumnailArrayWithString(playerResponse) ?: videoDetails[@"thumbnail"][@"thumbnails"];
 			if (thumbnails.count >= 1) {
 				// Prepare array of thumbnails URLs.
 				NSMutableArray<NSURL *> *thumbnailURLs = [[NSMutableArray<NSURL *> alloc] initWithCapacity:thumbnails.count];
@@ -251,13 +257,15 @@ static NSDate * ExpirationDate(NSURL *streamURL)
 		
 		NSMutableDictionary *streamURLs = [NSMutableDictionary new];
 		
-		if (httpLiveStream)
+		if (httpLiveStream != nil) {
+			_streamURL = [NSURL URLWithString:httpLiveStream];
 			streamURLs[XCDYouTubeVideoQualityHTTPLiveStreaming] = [NSURL URLWithString:httpLiveStream];
+		}
 		
 		NSMutableDictionary *captionURLs = [NSMutableDictionary new];
 		NSMutableDictionary *autoGeneratedCaptionURLs = [NSMutableDictionary new];
 		
-		for (NSDictionary *caption in XCDCaptionArrayWithString(playerResponse))
+		for (NSDictionary *caption in XCDCaptionArrayWithDictionary(info))
 		{
 			NSString *languageCode = caption[@"languageCode"];
 			NSString *captionVersion = caption[@"vssId"];

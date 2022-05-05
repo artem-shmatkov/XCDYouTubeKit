@@ -9,6 +9,6 @@
 #import "VCR.h"
 
 @interface VCR (NSURLSessionConfiguration)
-void VCRAddProtocolsToNSURLSessionConfiguration();
-void VCRRemoveProtocolsFromNSURLSessionConfiguration();
+void VCRAddProtocolsToNSURLSessionConfiguration(void);
+void VCRRemoveProtocolsFromNSURLSessionConfiguration(void);
 @end
